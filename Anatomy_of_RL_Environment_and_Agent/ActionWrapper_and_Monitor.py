@@ -1,4 +1,8 @@
 import gym, random
+
+'''
+Wrappers are used to extend the functionality of the environment.
+'''
 class ActionWrapper_Example(gym.ActionWrapper):
     def __init__(self, env, epsilon = 0.1):
         super(ActionWrapper_Example, self).__init__(env)
