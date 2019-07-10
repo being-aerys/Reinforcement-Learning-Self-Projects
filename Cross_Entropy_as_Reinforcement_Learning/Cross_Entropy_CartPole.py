@@ -1,3 +1,5 @@
+#This code is based on Chapter 4 of Deep Reinforcement Learning Hands-On book, Chapter 4.
+
 import time, gym
 from tensorboardX import SummaryWriter
 import numpy as np
