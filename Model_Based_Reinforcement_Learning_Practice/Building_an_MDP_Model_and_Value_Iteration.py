@@ -1,11 +1,12 @@
-#Pracaticing from the book Deep Reinforcement Learning Hands-On
+
+"""Implementing my own version of model-based reinforcement learning"""
 
 import gym, collections, numpy as np, time
 from tensorboardX import SummaryWriter
 
 env = "FrozenLake-v0"
 discount_factor = 0.9
-episodes_to_generate_before_every_batch_of_training = 50
+no_of_random_transitions_per_training_batch = 100
 no_of_test_episodes = 20
 
 class Agent:
@@ -13,70 +14,129 @@ class Agent:
     def __init__(self):
         self.environment = gym.make(env)
         self.current_state_agent_is_in = self.environment.reset()
-        self.reward_storage_data_structure = collections.defaultdict(float) #going to contain <key, reward> in the dictionary
-        self.transitions = collections.defaultdict(collections.Counter)  #going to contain < key = (state, action, next) , value = Count >
-        self.values = collections.defaultdict(float)
 
-        #data structure for the transition model and reward model
-        self.transision_probability_cuboid = np.zeros((self.environment.action_space.n, self.environment.observation_space.n, self.environment.observation_space.n))
+        #data structures for the transition model and reward model
+        self.transision_probability_cuboid = np.zeros(( self.environment.observation_space.n,self.environment.action_space.n, self.environment.observation_space.n))
+
+        self.no_of_transitions_from_s_to_s_prime_with_action_a = np.zeros((self.environment.observation_space.n, self.environment.action_space.n, self.environment.observation_space.n))
+        #shape is (16, 4, 16)
         self.transition_reward_matrix = np.zeros((self.environment.observation_space.n, self.environment.action_space.n))
 
+        self.value_of_all_states = np.zeros((self.environment.observation_space.n))
 
-    def generate_episodes_to_learn_transition_prob_and_reward_model(self, no_of_episodes_to_play):
 
-        for _ in range(no_of_episodes_to_play):
-            #we will be taking random actions to explore the environment since we just want to learn the transition and reward models of the env
+
+    def generate_random_transitions(self, no_of_steps_to_generate):
+
+
+        for _ in range(no_of_steps_to_generate):
+
             random_action = self.environment.action_space.sample()#remember this is how we sample an action in an environment in gym
             next_state, reward, is_episode_over, _ = self.environment.step(random_action)
 
-            #store this (key = (state, action, next_state) :  value = reward for this transition) pair in self.state_transision_reward_data_structure
-            self.reward_storage_data_structure[(self.current_state_agent_is_in, random_action, next_state)] = reward
 
-            #store the transition as well
-            self.transitions[(self.current_state_agent_is_in, random_action)] [next_state] += 1
+
+
+            '''Learn transition probability.'''
+            self.no_of_transitions_from_s_to_s_prime_with_action_a[self.current_state_agent_is_in][random_action][next_state] += 1
+
+
+
+            total_no_of_times_this_action_was_taken_in_this_state = (self.no_of_transitions_from_s_to_s_prime_with_action_a[self.current_state_agent_is_in][random_action]).sum()
+
+
+            self.transision_probability_cuboid[self.current_state_agent_is_in][random_action][next_state] = (self.no_of_transitions_from_s_to_s_prime_with_action_a[self.current_state_agent_is_in][random_action][next_state]) / float(total_no_of_times_this_action_was_taken_in_this_state)
+
+
+            '''Learn reward model.'''
+            self.transition_reward_matrix[self.current_state_agent_is_in][random_action] = (self.transition_reward_matrix[self.current_state_agent_is_in][random_action] + reward) / (self.no_of_transitions_from_s_to_s_prime_with_action_a[self.current_state_agent_is_in][random_action]).sum()
+
+            if reward ==1:
+
+                print("state is ", self.current_state_agent_is_in)
+                print(self.transition_reward_matrix[self.current_state_agent_is_in][random_action])
+                #time.sleep(1)
 
 
 
             if is_episode_over:
+
+
+
                 self.current_state_agent_is_in = self.environment.reset()
                 break
             else:
                 self.current_state_agent_is_in = next_state
 
-    def learn_reward_and_transition_model(self):
 
 
+    '''VVI: for every state, perform a bellman backup using the transition probability and reward model learned after every batch of training data
+    generated'''
 
-        for (state, action) in self.transitions:
-
-
-
-
-
-        target_counts = self.transits[(state, action)]
-        total = sum(target_counts.values())
-        action_value = 0.0
-        for tgt_state, count in target_counts.items():
-            reward = self.rewards[(state, action, tgt_state)]
-            action_value += (count / total) * (reward + GAMMA * self.values[tgt_state])
-        return action_value
-
-    def calculate_values_of_a_state(self):
-
-    def learn_transition_and_reward_models(self):
-
-    '''VVI: for every state, perform a bellman backup using the transition probability and reward model learned'''
     def value_iteration(self):
 
+        for current_state in range(self.environment.observation_space.n):
+
+            list_of_possible_values_of_this_state_for_actions_taken = np.zeros(self.environment.action_space.n)
 
 
-        for state in range(self.environment.observation_space.n):
             for action in range(self.environment.action_space.n):
 
+                list_of_possible_values_of_this_state_for_actions_taken[action] = self.transition_reward_matrix[current_state][action] + discount_factor *(np.dot(self.transision_probability_cuboid[current_state] [action], self.value_of_all_states ))
+
+                best_value_according_to_best_action = max(list_of_possible_values_of_this_state_for_actions_taken)
 
 
 
-    def test_the_environment(self):
+                self.value_of_all_states[current_state] = best_value_according_to_best_action
+
+
+
+
+    def calculate_the_value_of_this_action_value_for_current_state(self, state, action):
+
+        action_value = self.transition_reward_matrix[state][action] + discount_factor * ((np.dot(self.transision_probability_cuboid[state] [action], self.value_of_all_states )))
+
+        return action_value
+
+
+    def select_best_action_according_to_the_state_values(self, current_state):
+
+
+        list_of_values_for_the_actions = np.zeros(self.environment.observation_space.n)
+
+        for action in range(self.environment.action_space.n):
+
+            action_value = self.calculate_the_value_of_this_action_value_for_current_state(current_state, action)
+
+            list_of_values_for_the_actions[action]
+
+        best_action = list_of_values_for_the_actions.argmax()
+
+        return best_action
+
+
+    def play_test_episodes(self, test_env_instance):
+
+        total_reward = 0.0
+
+        state = test_env_instance.reset()
+
+        while True:
+
+            action = self.select_best_action_according_to_the_state_values(state)
+
+
+            new_state, reward, is_episode_over, _ = test_env_instance.step(action)
+
+            total_reward += reward
+
+            if is_episode_over:
+                break
+
+            state = new_state
+
+        return total_reward
 
 
 
@@ -84,9 +144,7 @@ if __name__ == "__main__":
 
     environment = gym.make(env)
 
-    print(environment.action_space.n)
-    time.sleep(1111)
-    agent_for_Value_Iteration = Agent()
+    agent_for_value_iteration = Agent()
 
     writer = SummaryWriter(comment= "Learning values of state using Value Iteration")
 
@@ -104,12 +162,46 @@ if __name__ == "__main__":
 
     current_batch_of_training = 0
 
+    max_avg_reward_during_training = 0
+
     while True:
 
-        '''Generate episodes to learn the model of the environment.'''
-        agent_for_Value_Iteration.generate_episodes_to_learn_transition_prob_and_reward_model(episodes_to_generate_before_every_batch_of_training)
+        '''Generate episodes to learn the transition and reward models of the environment.'''
+        agent_for_value_iteration.generate_random_transitions(no_of_random_transitions_per_training_batch)
 
         '''Learn values of the state using value_iteration'''
+        agent_for_value_iteration.value_iteration()
+
+        '''Calculated the average reward obtained for test episodes'''
+        total_reward_in_test_episodes = 0.0
+
+        for _ in range(no_of_test_episodes):
+
+            total_reward_in_test_episodes = agent_for_value_iteration.play_test_episodes(environment) #make sure you pass a new environment here,
+                                                                                                        #not the one the agent trained on
+
+        average_reward_per_test_episode = total_reward_in_test_episodes/ float(no_of_test_episodes)
+
+        print("Avg reward is ,",average_reward_per_test_episode)
+
+        writer.add_scalar("reward", average_reward_per_test_episode, current_batch_of_training)
+
+        if average_reward_per_test_episode > max_avg_reward_during_training:
+
+            print("New best average test reward updated from %.3f to %.3f" % (best_reward, average_reward_per_test_episode))
+
+            best_reward = average_reward_per_test_episode
+
+        if average_reward_per_test_episode > 0.9:
+
+            print("The agent has learned to solve the environment in 90% of the test episodes in %d iterations!" % current_batch_of_training)
+
+            break
+
+    writer.close()
+
+
+
 
 
 
