@@ -20,6 +20,11 @@ class Agent:
 
         self.no_of_transitions_from_s_to_s_prime_with_action_a = np.zeros((self.environment.observation_space.n, self.environment.action_space.n, self.environment.observation_space.n))
         #shape is (16, 4, 16)
+
+        self.no_of_times_action_a_was_taken_at_state_s = np.zeros((self.environment.observation_space.n,self.environment.action_space.n))
+
+        self.reward_obtained_by_taking_action_a_in_state_s = np.zeros((self.environment.observation_space.n,self.environment.action_space.n))
+
         self.transition_reward_matrix = np.zeros((self.environment.observation_space.n, self.environment.action_space.n))
 
         self.value_of_all_states = np.zeros((self.environment.observation_space.n))
@@ -28,40 +33,36 @@ class Agent:
 
     def generate_random_transitions(self, no_of_steps_to_generate):
 
-
         for _ in range(no_of_steps_to_generate):
 
             random_action = self.environment.action_space.sample()#remember this is how we sample an action in an environment in gym
+
             next_state, reward, is_episode_over, _ = self.environment.step(random_action)
-
-
-
 
             '''Learn transition probability.'''
             self.no_of_transitions_from_s_to_s_prime_with_action_a[self.current_state_agent_is_in][random_action][next_state] += 1
 
-
-
-            total_no_of_times_this_action_was_taken_in_this_state = (self.no_of_transitions_from_s_to_s_prime_with_action_a[self.current_state_agent_is_in][random_action]).sum()
-
-
-            self.transision_probability_cuboid[self.current_state_agent_is_in][random_action][next_state] = (self.no_of_transitions_from_s_to_s_prime_with_action_a[self.current_state_agent_is_in][random_action][next_state]) / float(total_no_of_times_this_action_was_taken_in_this_state)
-
+            self.transision_probability_cuboid[self.current_state_agent_is_in][random_action] = (self.no_of_transitions_from_s_to_s_prime_with_action_a[self.current_state_agent_is_in][random_action]) / float(self.no_of_transitions_from_s_to_s_prime_with_action_a[self.current_state_agent_is_in][random_action].sum())
 
             '''Learn reward model.'''
-            self.transition_reward_matrix[self.current_state_agent_is_in][random_action] = (self.transition_reward_matrix[self.current_state_agent_is_in][random_action] + reward) / (self.no_of_transitions_from_s_to_s_prime_with_action_a[self.current_state_agent_is_in][random_action]).sum()
+            self.no_of_times_action_a_was_taken_at_state_s[self.current_state_agent_is_in][random_action] += 1
 
-            if reward ==1:
+            self.reward_obtained_by_taking_action_a_in_state_s[self.current_state_agent_is_in][random_action] += reward
 
-                print("state is ", self.current_state_agent_is_in)
-                print(self.transition_reward_matrix[self.current_state_agent_is_in][random_action])
-                #time.sleep(1)
+            self.transition_reward_matrix[self.current_state_agent_is_in][random_action] = self.reward_obtained_by_taking_action_a_in_state_s[self.current_state_agent_is_in][random_action]/float(self.no_of_times_action_a_was_taken_at_state_s[self.current_state_agent_is_in][random_action])
+
+
+
+            # if reward ==1:
+            #
+            #     print("Reward is 1", self.current_state_agent_is_in)
+            #     # print(self.transition_reward_matrix[self.current_state_agent_is_in][random_action])
+            #     # print(self.transition_reward_matrix)
+            #
 
 
 
             if is_episode_over:
-
-
 
                 self.current_state_agent_is_in = self.environment.reset()
                 break
@@ -75,32 +76,59 @@ class Agent:
 
     def value_iteration(self):
 
-        for current_state in range(self.environment.observation_space.n):
+        for state in range(self.environment.observation_space.n):
+            #time.sleep(1)
 
-            list_of_possible_values_of_this_state_for_actions_taken = np.zeros(self.environment.action_space.n)
+            state_values_possible = np.zeros(self.environment.action_space.n)
 
 
             for action in range(self.environment.action_space.n):
 
-                list_of_possible_values_of_this_state_for_actions_taken[action] = self.transition_reward_matrix[current_state][action] + discount_factor *(np.dot(self.transision_probability_cuboid[current_state] [action], self.value_of_all_states ))
+                # print("cuboid",self.transision_probability_cuboid[state][action])
+                # time.sleep(.1)
+                #np.dot(self.transision_probability_cuboid[state][action], self.value_of_all_states)
 
-                best_value_according_to_best_action = max(list_of_possible_values_of_this_state_for_actions_taken)
+                state_values_possible[action] = self.transition_reward_matrix[state][action] + discount_factor *(np.dot(self.transision_probability_cuboid[state] [action], self.value_of_all_states ))
+
+                #print("possible values",state_values_possible)
+
+
+                best_value_according_to_best_action = max(state_values_possible)
 
 
 
-                self.value_of_all_states[current_state] = best_value_according_to_best_action
+                self.value_of_all_states[state] = best_value_according_to_best_action
+        #print(self.value_of_all_states)
 
 
 
 
     def calculate_the_value_of_this_action_value_for_current_state(self, state, action):
 
+
+
+
         action_value = self.transition_reward_matrix[state][action] + discount_factor * ((np.dot(self.transision_probability_cuboid[state] [action], self.value_of_all_states )))
+        # print("---------------------------------------------")
+        # print(self.transition_reward_matrix[state][action])
+        # print("--")
+        # print(self.transision_probability_cuboid[state][action])
+        # print("--")
+        # print(self.value_of_all_states)
+        # print("--")
+        # print(np.dot(self.transision_probability_cuboid[state][action], self.value_of_all_states))
+        # print("--")
+        # print(action_value)
+        # if action_value > 0:
+        #     time.sleep(1)
 
         return action_value
 
 
+
     def select_best_action_according_to_the_state_values(self, current_state):
+
+        #print("Select best action for current state: ",current_state)
 
 
         list_of_values_for_the_actions = np.zeros(self.environment.observation_space.n)
@@ -109,20 +137,24 @@ class Agent:
 
             action_value = self.calculate_the_value_of_this_action_value_for_current_state(current_state, action)
 
-            list_of_values_for_the_actions[action]
+            list_of_values_for_the_actions[action] = action_value
 
         best_action = list_of_values_for_the_actions.argmax()
+
 
         return best_action
 
 
     def play_test_episodes(self, test_env_instance):
 
+        #print("Playing test episodes:\n")
+
         total_reward = 0.0
 
         state = test_env_instance.reset()
 
         while True:
+            #print("Total reward is: ",total_reward)
 
             action = self.select_best_action_according_to_the_state_values(state)
 
@@ -130,6 +162,10 @@ class Agent:
             new_state, reward, is_episode_over, _ = test_env_instance.step(action)
 
             total_reward += reward
+
+            # if total_reward > 0:
+            #     print("total reward > 0", total_reward)
+            #     #time.sleep(2)
 
             if is_episode_over:
                 break
@@ -172,6 +208,8 @@ if __name__ == "__main__":
         '''Learn values of the state using value_iteration'''
         agent_for_value_iteration.value_iteration()
 
+
+
         '''Calculated the average reward obtained for test episodes'''
         total_reward_in_test_episodes = 0.0
 
@@ -179,22 +217,27 @@ if __name__ == "__main__":
 
             total_reward_in_test_episodes = agent_for_value_iteration.play_test_episodes(environment) #make sure you pass a new environment here,
                                                                                                         #not the one the agent trained on
-
         average_reward_per_test_episode = total_reward_in_test_episodes/ float(no_of_test_episodes)
 
+        # if average_reward_per_test_episode > 0:
+        #     print(average_reward_per_test_episode, "avg rew")
+        #     time.sleep(3)
+
         print("Avg reward is ,",average_reward_per_test_episode)
+
 
         writer.add_scalar("reward", average_reward_per_test_episode, current_batch_of_training)
 
         if average_reward_per_test_episode > max_avg_reward_during_training:
 
-            print("New best average test reward updated from %.3f to %.3f" % (best_reward, average_reward_per_test_episode))
+            print("New best average test reward updated from %.3f to %.3f" % (max_avg_reward_during_training, average_reward_per_test_episode))
+            time.sleep(3)
 
-            best_reward = average_reward_per_test_episode
+            max_avg_reward_during_training = average_reward_per_test_episode
 
-        if average_reward_per_test_episode > 0.9:
+        if average_reward_per_test_episode > 0.8:
 
-            print("The agent has learned to solve the environment in 90% of the test episodes in %d iterations!" % current_batch_of_training)
+            print("The agent has learned to solve the environment in 80% of the test episodes in %d iterations!" % current_batch_of_training)
 
             break
 
